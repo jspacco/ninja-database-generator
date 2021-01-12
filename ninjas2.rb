@@ -55,6 +55,15 @@ end
     * give each ninja a date/time picker
 =end
 
+class Ninja
+    def initialize
+        # date picker
+        @datetime = TimeMaker.new
+        # weapon picker
+        # who to attack picker
+    end
+end
+
 
 class TimeMaker
     def initialize
@@ -63,12 +72,14 @@ class TimeMaker
         @months = *(1..12)
         @days = *(1..28)
         @hours = *(0..23)
+        # 50% chance to randomly remove 1 to 3 years
         @years = remove(@years, $rng(1..3)) if $rng.rand > 0.5
+        # 50% chance to randomly remove 1 to 6 months
         @months = remove(@years, $rng(1..6)) if $rng.rand > 0.5
         # TODO: use cycle/next to get 12 hours starting at a random time
     end
 
-    def makedatetime
+    def next
         # make sure we don't get duplicate times
         while true
             ts = "%d-%02d-%02d %02d:%02d:%02d" % [
@@ -108,4 +119,28 @@ def sampleprob(array, fifty=false)
             probs << $rng.rand(1..10)
         end
     end
+end
+
+def main
+    $rng = Random.new(1)
+    # create weapons
+    weapon_names = ['katana', 'bo stick', 'shuriken', 'nunchaku', 'blowgun',
+        'wakizashi', 'quarterstaff', 'harsh words', 'sai', 'kakute',
+        'naginate', 'harsh language'
+    ]
+    weapon_names.shuffle(random: $rng)
+    # remove between 0 and 4 weapons
+    weapon_names[0..(weapon_names.length - $rng.rand())]
+    weapons = Hash.new
+    weapon_names.each_with_index do |name, i|
+        weapons[i] = Weapon.new(i, name, $damage_profile.sample(random: $rng), $rng.rand > 0.5)
+    end
+
+    # TODO: create ninjas
+    # each one will have a TimePicker and an attack profile based on the number
+    #   of total ninjas
+    #ninja_names = 
+
+
+    
 end
