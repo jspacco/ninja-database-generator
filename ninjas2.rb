@@ -1,18 +1,48 @@
+require 'set'
+
 $rng = Random.new
 $profiles = [:minmax, :_1d6, :_2d6, :_3d6, :_1d8, :_2d8, :_3d8, :_1d10, :_2d10]
+
+def flip(num=2)
+    # heads or tails coin flip
+    return $rng.rand(1..num) == 1
+end
+
+def gauss_arr(num)
+    return (1..(num/2)).to_a + (1..(num/2)).to_a.reverse if num % 2 == 0
+    return (1..(num/2)).to_a + [num/2+1] + (1..(num/2)).to_a.reverse
+end
+
+def gauss_profile(arr)
+    newarr = Array.new
+    arr.shuffle(random: $rng)
+    gauss_arr(arr.size).each_with_index do |num, i|
+        num.times do
+            newarr << arr[i]
+        end
+    end
+    return newarr
+end
+
+def frenemy(arr)
+    x = arr.sample(random: $rng)
+    arr.delete(x)
+    arr = gauss_profile(arr)
+    return [x] * arr.size + arr
+end
 
 class Weapon
     def initialize(id, name, damage_profile, tohit_adjusted=false)
         @id = id
         @name = name
-        @tohit = $rng.rand(0.15..0.85).round(2)
+        @tohit = $rng.rand(0.33..0.75).round(2)
         @tohit_adjusted = 0
         if tohit_adjusted
             @tohit_adjusted = $rng.rand(0.03..0.10).round(2)
             @tohit_adjusted *= -1 if $rng.rand > 0.5
         end
         @damage_profile = damage_profile
-        if damage_profile = :minmax
+        if damage_profile == :minmax
             @mindamage = $rng.rand(1..4)
             @maxdamage = @mindamage + $rng.rand(4..20)
         else
@@ -49,33 +79,18 @@ class Weapon
     end
 end
 
-=begin
-    * create array of weapons
-    * create array of ninjas -- must have attack and weapon usage probabilities
-    * give each ninja a date/time picker
-=end
-
-class Ninja
-    def initialize
-        # date picker
-        @datetime = TimeMaker.new
-        # weapon picker
-        # who to attack picker
-    end
-end
-
 
 class TimeMaker
     def initialize
         @cache = Set.new
         @years = *(2010..2020)
         @months = *(1..12)
-        @days = *(1..28)
+        @days = *(1..30)
         @hours = *(0..23)
         # 50% chance to randomly remove 1 to 3 years
-        @years = remove(@years, $rng(1..3)) if $rng.rand > 0.5
+        @years = remove(@years, $rng.rand(1..3)) if $rng.rand > 0.5
         # 50% chance to randomly remove 1 to 6 months
-        @months = remove(@years, $rng(1..6)) if $rng.rand > 0.5
+        @months = remove(@years, $rng.rand(1..6)) if $rng.rand > 0.5
         # TODO: use cycle/next to get 12 hours starting at a random time
     end
 
@@ -121,26 +136,123 @@ def sampleprob(array, fifty=false)
     end
 end
 
+
+class Ninja
+    def initialize(id, name, ninjas, weapons)
+        @id = id
+        @name = name
+        # date picker
+        @datetime = TimeMaker.new
+
+        @weapons = weapons
+        @ninjas = ninjas
+
+        # weapon list (by primary key, starting at 1)
+        @weaponids = *(1..weapons.size)
+        # ninjas list (by primary key, starting at 1)
+        @ninjaids = *(1..ninjas.size)
+
+
+        # remove self from ninjas
+        @ninjaids.delete(@id)
+
+        # 1/2 chance to remove 1-3 ninjas from attack list
+        remove(@ninjaids, $rng.rand(1..3)) if flip
+
+        if flip
+            # attack 1-3 ninjas more often than everyone else
+            $rng.rand(1..3).times do
+                $rng.rand(1..4).times do
+                    @ninjaids << @ninjaids.sample(random: $rng)
+                end
+            end
+        else
+            if flip
+                # gaussian attack profile
+                @ninjaids = gauss_profile(@ninjaids)
+            else
+                # gaussian for n-1, one ninja is 50% of attacks
+                @ninjaids = frenemy(@ninjaids)
+            end
+        end
+
+        # weapon picker
+        if flip
+            # choose 1-3 weapons more than the others
+            $rng.rand(1..3).times do
+                $rng.rand(1..4).times do
+                    @weaponids << @weaponids.sample(random: $rng)
+                end
+            end
+        else
+            if flip
+                # gaussian weapon choice profile
+                @weaponids = gauss_profile(@weaponids)
+            else
+                # gaussian for n-1, one weapon is 50% usage
+                @weaponids = frenemy(@weaponids)
+            end
+        end
+
+    end
+
+    def attack
+        # return tuple of ninja_id and weapon_id
+        defender = @ninjaids.sample(random: $rng)
+        weapon_id = @weaponids.sample(random: $rng)
+        weapon = @weapons[weapon_id]
+        hit = weapon.hit
+        damage = 0
+        damage = weapon.damage if hit == 1
+        time = @datetime.next
+        #TODO: produce a SQL insert statement
+        return "(#{@id}, #{defender}, '#{time}', #{weapon_id}, #{hit}, #{damage})"
+    end
+end
+
+
 def main
     $rng = Random.new(1)
     # create weapons
     weapon_names = ['katana', 'bo stick', 'shuriken', 'nunchaku', 'blowgun',
         'wakizashi', 'quarterstaff', 'harsh words', 'sai', 'kakute',
-        'naginate', 'harsh language'
+        'naginate', 'finger of death', 'atomic leg drop'
     ]
-    weapon_names.shuffle(random: $rng)
+    
     # remove between 0 and 4 weapons
-    weapon_names[0..(weapon_names.length - $rng.rand())]
+    remove(weapon_names, $rng.rand(0..4))
+    # now shuffle
+    weapon_names.shuffle(random: $rng)
+
     weapons = Hash.new
     weapon_names.each_with_index do |name, i|
-        weapons[i] = Weapon.new(i, name, $damage_profile.sample(random: $rng), $rng.rand > 0.5)
+        weapons[i+1] = Weapon.new(i+1, name, $profiles.sample(random: $rng), flip)
     end
 
-    # TODO: create ninjas
-    # each one will have a TimePicker and an attack profile based on the number
-    #   of total ninjas
-    #ninja_names = 
-
-
+    # create ninjas
+    ninja_names = ['alicia', 'bob', 'carlos', 'deandre', 'erika', 'fatima', 
+        'gina', 'hai', 'ibrahim', 'jess', 'kiva', 'leonardo',
+        'mohammed', 'nana', 'oscar', 'petri', 'quianna',
+        'romeo', 'salvador', 'thu', 'uma', 'violet', 'wu', 'xochitl', 'yasmin', 'zerubabel']
+    remove(ninja_names, $rng.rand(10..16))
+    #ninja_names.shuffle(random: $rng)
     
+    ninjas = Hash.new
+    ninja_names.each_with_index do |name, i|
+        # Pass: weapons
+        # weapon choice profile
+        # ninja attack profile
+        ninjas[i+1] = Ninja.new(i+1, name, ninjas, weapons)
+        #puts ninjas[i+1].attack
+    end
+
+    attacks = Array.new
+    100.times do 
+        ninja = ninjas.values.sample(random: $rng)
+        attacks << ninja.attack
+    end
+    puts "INSERT INTO attack (attacker_id, defender_id, time, weapon_id, success, damage)\n" +
+        "VALUES\n" + attacks.join(",\n") + ';'
 end
+
+main
