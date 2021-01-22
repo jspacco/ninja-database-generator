@@ -208,10 +208,41 @@ class Ninja
         #TODO: produce a SQL insert statement
         return "(#{@id}, #{defender}, '#{time}', #{weapon_id}, #{hit}, #{damage})"
     end
+
+    def to_sql
+        return "(#{@id}, '#{@name}')"
+    end
+end
+
+def create_ninjas_table(ninjas)
+    return "DROP TABLE IF EXISTS ninja;
+CREATE TABLE ninja (
+  id integer PRIMARY KEY,
+  name text
+);
+INSERT INTO ninja (id, name)
+VALUES
+" + ninjas.values.collect{ |n| n.to_sql}.join(",\n") + ";"
+end
+
+def create_weapons_table(weapons)
+    return "DROP TABLE IF EXISTS weapon;
+CREATE TABLE weapon (
+  id integer PRIMARY KEY,
+  name text,
+  hitpct real,
+  mindamage integer,
+  maxdamage integer
+);
+INSERT INTO weapon (id, name, hitpct, mindamage, maxdamage)
+VALUES\n" +
+  weapons.values.collect{ |w| w.to_sql}.join(",\n") + ";"
 end
 
 
-def main
+
+
+def main(num_attacks=10000)
     $rng = Random.new(1)
     # create weapons
     weapon_names = ['katana', 'bo stick', 'shuriken', 'nunchaku', 'blowgun',
@@ -246,13 +277,34 @@ def main
         #puts ninjas[i+1].attack
     end
 
+
+    puts create_ninjas_table(ninjas)
+    puts create_weapons_table(weapons)
+
     attacks = Array.new
-    100.times do 
+    num_attacks.times do 
         ninja = ninjas.values.sample(random: $rng)
         attacks << ninja.attack
     end
-    puts "INSERT INTO attack (attacker_id, defender_id, time, weapon_id, success, damage)\n" +
+
+    attack_table = "DROP TABLE IF EXISTS attack;
+CREATE TABLE attack (
+  attacker_id integer,
+  defender_id integer,
+  ttime date,
+  weapon_id integer,
+  success integer,
+  damage integer,
+  PRIMARY KEY(attacker_id, defender_id, ttime)
+);
+CREATE INDEX ix_attacker ON attack (attacker_id);
+CREATE INDEX ix_defender ON attack (defender_id);
+CREATE INDEX ix_time ON attack (ttime);
+"
+    puts attack_table
+    puts "INSERT INTO attack (attacker_id, defender_id, ttime, weapon_id, success, damage)\n" +
         "VALUES\n" + attacks.join(",\n") + ';'
+
 end
 
 main
