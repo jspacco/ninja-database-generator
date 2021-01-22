@@ -1,5 +1,4 @@
 require 'set'
-
 $rng = Random.new
 $profiles = [:minmax, :_1d6, :_2d6, :_3d6, :_1d8, :_2d8, :_3d8, :_1d10, :_2d10]
 
@@ -29,6 +28,40 @@ def frenemy(arr)
     arr.delete(x)
     arr = gauss_profile(arr)
     return [x] * arr.size + arr
+end
+
+class TimeMaker
+    def initialize
+        @start = Time.local(2010, 1, 1)
+        @end = Time.local(2020, 12, 31)
+        @cache = Set.new
+        
+        @skip_years = Set.new
+        @skip_months = Set.new
+        if flip
+            # remove 1..3 years
+            $rng.rand(1..3).times {@skip_years << $rng.rand(2010..2020)}
+        end
+        if flip
+            # remove 1..3 months
+            $rng.rand(1..3).times {@skip_months << $rng.rand(1..12)}
+        end
+    end
+
+    def is_ok(ts)
+        return !@skip_years.include?(ts.year) && !@skip_months.include?(ts.month)
+    end
+
+    def next
+        # make sure we don't get duplicate times
+        while true
+            ts = Time.at(@start + $rng.rand * (@end - @start))
+            if is_ok(ts) && !@cache.include?(ts)
+                @cache.add(ts)
+                return ts.strftime("%Y-%m-%d %H:%M:%S")
+            end
+        end
+    end
 end
 
 class Weapon
@@ -79,39 +112,6 @@ class Weapon
     end
 end
 
-
-class TimeMaker
-    def initialize
-        @cache = Set.new
-        @years = *(2010..2020)
-        @months = *(1..12)
-        @days = *(1..30)
-        @hours = *(0..23)
-        # 50% chance to randomly remove 1 to 3 years
-        @years = remove(@years, $rng.rand(1..3)) if $rng.rand > 0.5
-        # 50% chance to randomly remove 1 to 6 months
-        @months = remove(@years, $rng.rand(1..6)) if $rng.rand > 0.5
-        # TODO: use cycle/next to get 12 hours starting at a random time
-    end
-
-    def next
-        # make sure we don't get duplicate times
-        while true
-            ts = "%d-%02d-%02d %02d:%02d:%02d" % [
-                @years.sample,
-                @months.sample,
-                @days.sample,
-                @hours.sample,
-                $rng.rand(0...60),
-                $rng.rand(0...60)
-            ]
-            if !@cache.include? ts
-                @cache.add(ts)
-                return ts
-            end
-        end
-    end
-end
 
 def remove(array, num)
     num.times do
@@ -199,13 +199,16 @@ class Ninja
     def attack
         # return tuple of ninja_id and weapon_id
         defender = @ninjaids.sample(random: $rng)
+        if defender == nil
+            #STDERR.puts "FUCK"
+            STDERR.puts "#{@ninjaids.size}, #{@ninjas.size}"
+        end
         weapon_id = @weaponids.sample(random: $rng)
         weapon = @weapons[weapon_id]
         hit = weapon.hit
         damage = 0
         damage = weapon.damage if hit == 1
         time = @datetime.next
-        #TODO: produce a SQL insert statement
         return "(#{@id}, #{defender}, '#{time}', #{weapon_id}, #{hit}, #{damage})"
     end
 
@@ -299,7 +302,7 @@ CREATE TABLE attack (
 );
 CREATE INDEX ix_attacker ON attack (attacker_id);
 CREATE INDEX ix_defender ON attack (defender_id);
-CREATE INDEX ix_time ON attack (ttime);
+CREATE INDEX ix_ttime ON attack (ttime);
 "
     puts attack_table
     puts "INSERT INTO attack (attacker_id, defender_id, ttime, weapon_id, success, damage)\n" +
