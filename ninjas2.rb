@@ -12,6 +12,7 @@ seed = 5
 if ARGV.size > 1
     seed = ARGV[1].to_i
 end
+STDERR.puts "seed is #{seed}"
 $rng = Random.new(seed)
 
 
@@ -280,7 +281,6 @@ end
 
 
 def main(num_attacks=10000)
-    $rng = Random.new(1)
     # create weapons
     weapon_names = ['katana', 'bo stick', 'shuriken', 'nunchaku', 'blowgun',
         'wakizashi', 'quarterstaff', 'harsh words', 'sai', 'kakute',
