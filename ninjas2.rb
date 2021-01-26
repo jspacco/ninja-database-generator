@@ -1,5 +1,20 @@
 require 'set'
-$rng = Random.new
+
+# how many rows of attacks?
+num_rows = 1000
+if ARGV.size > 0
+    num_rows = ARGV[0].to_i
+end
+
+
+# create global rng with seed value given in command line
+seed = 5
+if ARGV.size > 1
+    seed = ARGV[1].to_i
+end
+$rng = Random.new(seed)
+
+
 $profiles = [:minmax, :_1d6, :_2d6, :_3d6, :_1d8, :_2d8, :_3d8, :_1d10, :_2d10]
 
 def flip(num=2)
@@ -49,16 +64,18 @@ class TimeMaker
     end
 
     def is_ok(ts)
-        return !@skip_years.include?(ts.year) && !@skip_months.include?(ts.month)
+        year = ts[0..3]
+        month = ts[5..6]
+        return !@skip_years.include?(year) && !@skip_months.include?(month)
     end
 
     def next
         # make sure we don't get duplicate times
         while true
-            ts = Time.at(@start + $rng.rand * (@end - @start))
+            ts = Time.at(@start + $rng.rand * (@end - @start)).strftime("%Y-%m-%d %H:%M:%S")
             if is_ok(ts) && !@cache.include?(ts)
                 @cache.add(ts)
-                return ts.strftime("%Y-%m-%d %H:%M:%S")
+                return ts
             end
         end
     end
@@ -138,20 +155,21 @@ end
 
 
 class Ninja
-    def initialize(id, name, ninjas, weapons)
+    def initialize(id, name, weapons, num_ninjas)
+        # weapons is a hash from pk to the weapon
+        # num_ninjas is just the number of ninjas. To create an attack, we
+        #      only need their PKs, no other info about the ninjas
         @id = id
         @name = name
         # date picker
         @datetime = TimeMaker.new
 
         @weapons = weapons
-        @ninjas = ninjas
 
         # weapon list (by primary key, starting at 1)
         @weaponids = *(1..weapons.size)
         # ninjas list (by primary key, starting at 1)
-        @ninjaids = *(1..ninjas.size)
-
+        @ninjaids = *(1..num_ninjas)
 
         # remove self from ninjas
         @ninjaids.delete(@id)
@@ -193,16 +211,15 @@ class Ninja
                 @weaponids = frenemy(@weaponids)
             end
         end
+    end
 
+    def ninjaids
+        return @ninjaids
     end
 
     def attack
         # return tuple of ninja_id and weapon_id
         defender = @ninjaids.sample(random: $rng)
-        if defender == nil
-            #STDERR.puts "FUCK"
-            STDERR.puts "#{@ninjaids.size}, #{@ninjas.size}"
-        end
         weapon_id = @weaponids.sample(random: $rng)
         weapon = @weapons[weapon_id]
         hit = weapon.hit
@@ -242,7 +259,24 @@ VALUES\n" +
   weapons.values.collect{ |w| w.to_sql}.join(",\n") + ";"
 end
 
-
+def create_attacks_table(attacks)
+    return "
+DROP TABLE IF EXISTS attack;
+CREATE TABLE attack (
+  attacker_id integer,
+  defender_id integer,
+  ttime date,
+  weapon_id integer,
+  success integer,
+  damage integer,
+  PRIMARY KEY(attacker_id, defender_id, ttime)
+);
+CREATE INDEX ix_attacker ON attack (attacker_id);
+CREATE INDEX ix_defender ON attack (defender_id);
+CREATE INDEX ix_ttime ON attack (ttime);
+INSERT INTO attack (attacker_id, defender_id, ttime, weapon_id, success, damage)
+VALUES\n" + attacks.join(",\n") + "\n"
+end
 
 
 def main(num_attacks=10000)
@@ -268,21 +302,16 @@ def main(num_attacks=10000)
         'gina', 'hai', 'ibrahim', 'jess', 'kiva', 'leonardo',
         'mohammed', 'nana', 'oscar', 'petri', 'quianna',
         'romeo', 'salvador', 'thu', 'uma', 'violet', 'wu', 'xochitl', 'yasmin', 'zerubabel']
-    remove(ninja_names, $rng.rand(10..16))
-    #ninja_names.shuffle(random: $rng)
-    
+    remove(ninja_names, $rng.rand(8..12))
+        
     ninjas = Hash.new
     ninja_names.each_with_index do |name, i|
-        # Pass: weapons
-        # weapon choice profile
-        # ninja attack profile
-        ninjas[i+1] = Ninja.new(i+1, name, ninjas, weapons)
-        #puts ninjas[i+1].attack
+        # Pass: weapons hash
+        # num_ninjas
+        # id and name
+        # weapon choice profile and ninja attack profile get created in constructor
+        ninjas[i+1] = Ninja.new(i+1, name, weapons, ninja_names.size)
     end
-
-
-    puts create_ninjas_table(ninjas)
-    puts create_weapons_table(weapons)
 
     attacks = Array.new
     num_attacks.times do 
@@ -290,24 +319,12 @@ def main(num_attacks=10000)
         attacks << ninja.attack
     end
 
-    attack_table = "DROP TABLE IF EXISTS attack;
-CREATE TABLE attack (
-  attacker_id integer,
-  defender_id integer,
-  ttime date,
-  weapon_id integer,
-  success integer,
-  damage integer,
-  PRIMARY KEY(attacker_id, defender_id, ttime)
-);
-CREATE INDEX ix_attacker ON attack (attacker_id);
-CREATE INDEX ix_defender ON attack (defender_id);
-CREATE INDEX ix_ttime ON attack (ttime);
-"
-    puts attack_table
-    puts "INSERT INTO attack (attacker_id, defender_id, ttime, weapon_id, success, damage)\n" +
-        "VALUES\n" + attacks.join(",\n") + ';'
+    
+    puts create_ninjas_table(ninjas)
+    puts create_weapons_table(weapons)
+    puts create_attacks_table(attacks)
+
 
 end
 
-main
+main(num_rows)
