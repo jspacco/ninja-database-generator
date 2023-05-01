@@ -1,22 +1,25 @@
 #!/bin/bash
 
-filename="a.txt"
 
-i=1
-if [ -f "$filename" ]; then
-    while read line; do
-        echo $line $i
-        ruby ninjas2.rb 10 $i > ninjas.sql
-        sqlite3 db3/$line.db < ninjas.sql
-        ((i++))
-    done < "$filename"
+# file containing usernames of all students in the class
+students="students.txt"
+#students="a.txt"
+
+# number of total attacks each ninjas makes
+num_rows=30000
+#num_rows=10
+
+# file containing names for the ninjas, hopefully drawn from students through a Google Form
+ninja_names="name1.txt"
+
+seed=5
+if [ -f "$students" ]; then
+    while read username; do
+        echo $username $seed
+        ruby ninjas2.rb $num_rows $ninja_names $seed > ninjas.sql
+        sqlite3 db/$username.db < ninjas.sql
+        ((seed++))
+    done < "$students"
 fi
 
-exit
-
-for i in {36..36}; do
-    #ruby ninjas2.rb 300000 $i > ninjas.sql
-    sqlite3 db2/ninjas$i.db < ninjas.sql
-    echo $i
-done
 
