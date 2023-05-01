@@ -1,22 +1,30 @@
 require 'set'
 
+if ARGV.empty?
+    puts "Usage: ninjas2.rb [ <num_rows> <name_file> <seed> ]"
+    exit 1
+end
+
 # how many rows of attacks?
 num_rows = 1000
 if ARGV.size > 0
-    num_rows = ARGV[0].to_i
+    num_rows = ARGV.shift.to_i
 end
-
+name_file = nil
+if ARGV.size > 0
+    name_file = ARGV.shift
+end
 
 # create global rng with seed value given in command line
 seed = 5
-if ARGV.size > 1
-    seed = ARGV[1].to_i
+if ARGV.size > 0
+    seed = ARGV.shift.to_i
 end
 STDERR.puts "seed is #{seed}"
 $rng = Random.new(seed)
 
 
-$profiles = [:minmax, :_1d6, :_2d6, :_3d6, :_1d8, :_2d8, :_3d8, :_1d10, :_2d10]
+$profiles = [:minmax] * 4 + [:_1d6, :_2d6, :_3d6, :_1d8, :_2d8, :_3d8, :_1d10, :_2d10]
 
 def flip(num=2)
     # heads or tails coin flip
@@ -280,7 +288,7 @@ VALUES\n" + attacks.join(",\n") + "\n"
 end
 
 
-def main(num_attacks=10000)
+def main(num_attacks=10000, name_file=nil)
     # create weapons
     weapon_names = ['katana', 'bo stick', 'shuriken', 'nunchaku', 'blowgun',
         'wakizashi', 'quarterstaff', 'harsh words', 'sai', 'kakute',
@@ -298,10 +306,14 @@ def main(num_attacks=10000)
     end
 
     # create ninjas
-    ninja_names = ['alicia', 'bob', 'carlos', 'deandre', 'erika', 'fatima', 
-        'gina', 'hai', 'ibrahim', 'jess', 'kiva', 'leonardo',
-        'mohammed', 'nana', 'oscar', 'petri', 'quianna',
-        'romeo', 'salvador', 'thu', 'uma', 'violet', 'wu', 'xochitl', 'yasmin', 'zerubabel']
+    if name_file != nil
+        ninja_names = File.open(name_file, "r").read.split("\n")
+    else
+        ninja_names = ['alicia', 'bob', 'carlos', 'deandre', 'erika', 'fatima', 
+            'gina', 'hai', 'ibrahim', 'jess', 'kiva', 'leonardo',
+            'mohammed', 'nana', 'oscar', 'petri', 'quianna',
+            'romeo', 'salvador', 'thu', 'uma', 'violet', 'wu', 'xochitl', 'yasmin', 'zerubabel']
+    end
     remove(ninja_names, $rng.rand(8..12))
         
     ninjas = Hash.new
@@ -327,4 +339,4 @@ def main(num_attacks=10000)
 
 end
 
-main(num_rows)
+main(num_rows, name_file)
